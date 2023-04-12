@@ -15,24 +15,22 @@ Victim code.
 #define jump_size 512
 #define four_k 4096
 #define dont_check 7
-const uint8_t secret_byte = 43;
+#define secret_byte 43
 
 unsigned int array1_size = 16;
 uint8_t array2[256 * jump_size];
 
-char *secret = "The password is rootkea";
-
 uint8_t temp = 0; /* Used so compiler won’t optimize out victim_function() */
 
-void victim_func(int is_mal, uint8_t value, uint8_t *stored_ptr, uint8_t *stored_ptr_mal)
+void victim_func(int is_mal, uint8_t value, uint8_t *store_ptr, uint8_t *store_ptr_mal)
 {
   uint8_t loaded_value;
   // Store value to memory location
-  *stored_ptr = value;
+  *store_ptr = value;
   if (is_mal < array1_size)
   {
-    loaded_value = *stored_ptr_mal;
     // Load value from memory location + maybe 4K
+    loaded_value = *store_ptr_mal;
     temp &= array2[loaded_value * jump_size];
   }
 }
@@ -77,8 +75,9 @@ void readMemoryByte(size_t malicious_x, uint8_t value[2], int score[2])
       x = training_x ^ (x & (malicious_x ^ training_x));
 
       // Value to store
-      uint8_t value;
-      // The location to store is the address of the 'store' var
+      uint8_t value = dont_check;
+      // The location that will be sometimes +4K
+      // If this is an assignment and not just declaration we see a different behaviour
       uint8_t store;
       uint8_t *store_mal_ptr;
       if (x == malicious_x)
@@ -90,8 +89,7 @@ void readMemoryByte(size_t malicious_x, uint8_t value[2], int score[2])
       else
       {
         store_mal_ptr = &store;
-        value = dont_check;
-        is_mal = 0;
+        is_mal = 5;
       }
       /* Call the victim! */
       victim_func(is_mal, value, &store, store_mal_ptr);
